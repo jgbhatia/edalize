@@ -12,7 +12,7 @@ set_option designread_disable_flatten no
 
 # Make no only FATAL messages return a non-zero exit code, but also ERRORs and
 # WARNINGs
-set_option enable_pass_exit_codes yes
+set_option enable_pass_exit_codes no
 
 {% for option in tool_options.spyglass_options %}
 set_option {{ option }}
