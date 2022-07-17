@@ -398,6 +398,16 @@ class Edatool(object):
             return True
         return False
 
+    def _add_library_file(self, f, libfiles, force_slash=False):
+        if f.get("is_library_file"):
+            _libfile = f["name"]
+            if force_slash:
+                _libfile = _libfile.replace("\\", "/")
+            if not _libfile in libfiles:
+                libfiles.append(_libfile)
+            return True
+        return False
+
     def _get_fileset_files(self, force_slash=False):
         class File:
             def __init__(self, name, file_type, logical_name):
@@ -407,15 +417,17 @@ class Edatool(object):
 
         incdirs = []
         src_files = []
+        libfiles = []
         for f in self.files:
             if not self._add_include_dir(f, incdirs, force_slash):
-                _name = f["name"]
-                if force_slash:
-                    _name = _name.replace("\\", "/")
-                file_type = f.get("file_type", "")
-                logical_name = f.get("logical_name", "")
-                src_files.append(File(_name, file_type, logical_name))
-        return (src_files, incdirs)
+                if not self._add_library_file(f, libfiles, force_slash):
+                    _name = f["name"]
+                    if force_slash:
+                        _name = _name.replace("\\", "/")
+                    file_type = f.get("file_type", "")
+                    logical_name = f.get("logical_name", "")
+                    src_files.append(File(_name, file_type, logical_name)) 
+        return (src_files, incdirs, libfiles)
 
     def _param_value_str(self, param_value, str_quote_style="", bool_is_str=False):
         return jinja_filter_param_value_str(param_value, str_quote_style, bool_is_str)
@@ -499,7 +511,7 @@ class Edatool(object):
 
         with open(output_file, "w") as f:
             unused_files = []
-            (src_files, incdirs) = self._get_fileset_files()
+            (src_files, incdirs, libfiles) = self._get_fileset_files()
 
             for key, value in self.vlogdefine.items():
                 define_str = self._param_value_str(param_value=value)
@@ -514,6 +526,9 @@ class Edatool(object):
 
             for id in incdirs:
                 f.write("+incdir+" + id + "\n")
+
+            for id in libfiles:
+                f.write("-v " + id + "\n")
 
             for src_file in src_files:
                 if filter_func is None or filter_func(src_file):

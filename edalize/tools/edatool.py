@@ -115,10 +115,21 @@ class Edatool(object):
     def _add_include_dir(self, f, incdirs, force_slash=False):
         if f.get("is_include_file"):
             _incdir = f.get("include_path") or os.path.dirname(f["name"]) or "."
+            _incdir = os.path.abspath(_incdir)
             if force_slash:
                 _incdir = _incdir.replace("\\", "/")
             if not _incdir in incdirs:
                 incdirs.append(_incdir)
+            return True
+        return False
+
+    def _add_library_file(self, f, libfiles, force_slash=False):
+        if f.get("is_library_file"):
+            _libfile = os.path.abspath(f["name"])
+            if force_slash:
+                _libfile = _libfile.replace("\\", "/")
+            if not _libfile in libfiles:
+                libfiles.append(_libfile)
             return True
         return False
 
