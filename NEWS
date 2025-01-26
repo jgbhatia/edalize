@@ -1,3 +1,70 @@
+0.6.0 2024-11-13 Olof Kindgren
+======================================================
+* New flows: gowin
+* New tools: gowin
+* gatemate: Support params and defines
+* quartus: Support qsys from version 23+
+* radiant: Support SDC
+* verilator: Add cocotb support + run_options, fix make_options
+* vivado: Fix BD IP generation, support EDIF subcomponents, support Versal
+* Migrate to pyproject.toml
+
+0.5.4 2023-12-11 Olof Kindgren
+======================================================
+* Fix lint-only mode in Verilator
+
+0.5.3 2023-12-08 Olof Kindgren
+======================================================
+* New flows: efinity
+* New tools: efinity, sandpipersaas
+* cocotb support for simulation flow
+* New backends for legacy Tool API design_compiler, genus
+* libero: Support projects without constraints or source files
+* ise: Add --pgm switch
+* radiant: Support SystemVerilog
+* quartus: Add --pgm switch
+* SymbiFlow: Support SystemVerilog
+* verilator: Support additional gen-xml, gen-dpi-hdr, gen-preprocess modes
+* vivado: Add --pgm switch
+* vunit: Support file dependencies
+* Fix EDAM documentation for flows and tools
+
+0.5.1 2023-05-17 Olof Kindgren
+======================================================
+* yosys: Fix yosys_template option
+* verilator: Fix dependencies on testbench files
+* icarus: Add missing vvp_options
+* Remove filelist backend
+* vivado: Add programming option
+
+0.5.0 2023-03-24 Olof Kindgren
+======================================================
+* New flows: generic, gate-level simulation
+* New backends: filelist, sandpipersaas, openroad
+* modelsim: Support mfcu mode
+* icarus: Support multiple toplevels
+* yosys : Support verilog output and simulation tag
+* vivado: Support netlist generation an simulation tag
+* Overhauled documentation
+* Improve internal flow API
+* Support external plugins
+* Avoid unnecessary rebuilds with flow API
+
+0.4.1 2022-12-26 Olof Kindgren
+======================================================
+* New flows: f4pga
+* New backends: slang, Questa Formal
+* Migrated to flow API: icarus
+* icarus: Add vvp_options, support multiple top levels
+* ise: Support FPGA families with spaces in name
+* openlane: Support SystemVerilog
+* vcs: Support launchers
+* verilator: Fix include files
+* vivado: Support launchers, fix pnr=none, fix include dirs on windows
+* yosys: Only use -pvector for edif
+* el_docker: Support additional docker args, update openlane version
+* Don't capture output of script hooks
+
 0.4.0 2022-07-12 Olof Kindgren
 ======================================================
 * New backends: OpenFPGA, VPR, Mistral, gatemate

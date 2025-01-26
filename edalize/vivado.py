@@ -62,6 +62,11 @@ class Vivado(Edatool):
                         "desc": "P&R tool. Allowed values are vivado (default) and none (to just run synthesis)",
                     },
                     {
+                        "name": "pgm",
+                        "type": "String",
+                        "desc": "Programming tool. Default is none, set to 'vivado' to program the FPGA in the run stage.",
+                    },
+                    {
                         "name": "jobs",
                         "type": "Integer",
                         "desc": "Number of jobs. Useful for parallelizing OOC (Out Of Context) syntheses.",
@@ -90,12 +95,25 @@ class Vivado(Edatool):
             }
 
     def __init__(self, edam=None, work_root=None, eda_api=None, verbose=True):
+        logger.warning(
+            "This backend is deprecated and will eventually be removed. Please migrate to the flow API instead.  See https://edalize.readthedocs.io/en/latest/ref/migrations.html#migrating-from-the-tool-api-to-the-flow-api for more details."
+        )
         super().__init__(edam, work_root, eda_api, verbose)
         edam["flow_options"] = edam["tool_options"]["vivado"]
         self.vivado = Vivado_underlying(edam, work_root, verbose)
 
     def configure_main(self):
         self.vivado.configure()
+
+    def build_main(self):
+        logger.info("Building")
+        args = []
+        if "pnr" in self.tool_options:
+            if self.tool_options["pnr"] == "vivado":
+                pass
+            elif self.tool_options["pnr"] == "none":
+                args.append("synth")
+        self._run_tool("make", args)
 
     def run_main(self):
         """
@@ -105,11 +123,8 @@ class Vivado(Edatool):
         correct FPGA board and then downloads the bitstream. The tcl script is then
         executed in Vivado's batch mode.
         """
-        if "pnr" in self.tool_options:
-            if self.tool_options["pnr"] == "vivado":
-                pass
-            elif self.tool_options["pnr"] == "none":
-                return
+        if ("pgm" not in self.tool_options) or (self.tool_options["pgm"] != "vivado"):
+            return
 
         self._run_tool("make", ["pgm"])
 

@@ -33,6 +33,7 @@ NON_TOOL_PACKAGES = [
     "ise_reporting",
     "vivado_reporting",
     "quartus_reporting",
+    "version",
 ]
 
 
@@ -41,7 +42,10 @@ def get_edatool(name):
 
 
 def walk_tool_packages():
-    for _, pkg_name, _ in walk_packages([os.path.dirname(__file__)], "edalize."):
+    parent_module = __name__.split(".")[0]
+    for _, pkg_name, _ in walk_packages(
+        sys.modules[parent_module].__path__, "edalize."
+    ):
         pkg_parts = pkg_name.split(".")
         if not pkg_parts[1] in NON_TOOL_PACKAGES:
             yield pkg_parts[1]
@@ -96,7 +100,7 @@ def subprocess_run_3_9(
     return subprocess.CompletedProcess(process.args, retcode, stdout, stderr)
 
 
-if sys.version_info < (3, 7):
+if sys.version_info < (3, 8):
     run = subprocess_run_3_9
 else:
     run = subprocess.run
@@ -150,7 +154,7 @@ class Edatool(object):
         except KeyError:
             raise RuntimeError("Missing required parameter 'name'")
 
-        self.tool_options = edam.get("tool_options", {}).get(_tool_name, {})
+        self.tool_options = edam.get("tool_options", {}).get(_tool_name, {}).copy()
 
         self.files = edam.get("files", [])
         self.toplevel = edam.get("toplevel", [])
@@ -333,7 +337,7 @@ class Edatool(object):
                     )
                 param_type_map[name.replace("-", "_")] = _paramtype
             else:
-                logging.warn(
+                logging.warning(
                     "Parameter '{}' has unsupported type '{}' for requested backend".format(
                         name, _paramtype
                     )
@@ -410,10 +414,17 @@ class Edatool(object):
 
     def _get_fileset_files(self, force_slash=False):
         class File:
-            def __init__(self, name, file_type, logical_name):
+            def __init__(
+                self,
+                name,
+                file_type,
+                logical_name,
+                core=None,
+            ):
                 self.name = name
                 self.file_type = file_type
                 self.logical_name = logical_name
+                self.core = core
 
         incdirs = []
         src_files = []
@@ -426,7 +437,8 @@ class Edatool(object):
                         _name = _name.replace("\\", "/")
                     file_type = f.get("file_type", "")
                     logical_name = f.get("logical_name", "")
-                    src_files.append(File(_name, file_type, logical_name)) 
+                    core = f.get("core", None)
+                    src_files.append(File(_name, file_type, logical_name, core)) 
         return (src_files, incdirs, libfiles)
 
     def _param_value_str(self, param_value, str_quote_style="", bool_is_str=False):
@@ -445,7 +457,6 @@ class Edatool(object):
                     script["cmd"],
                     cwd=self.work_root,
                     env=_env,
-                    capture_output=not self.verbose,
                     check=True,
                 )
             except FileNotFoundError as e:
@@ -537,3 +548,64 @@ class Edatool(object):
                     unused_files.append(src_file)
 
             return unused_files
+
+
+def _class_doc(items):
+    s = items["description"] + "\n\n"
+    lines = []
+    name_len = 10
+    type_len = 4
+    for item in items.get("members", []):
+        name_len = max(name_len, len(item["name"]))
+        type_len = max(type_len, len(item["type"]))
+        lines.append((item["name"], item["type"], item["desc"]))
+    for item in items.get("dicts", []):
+        name_len = max(name_len, len(item["name"]))
+        type_len = max(type_len, len(item["type"]) + 8)
+        lines.append((item["name"], "Dict of {}".format(item["type"]), item["desc"]))
+    for item in items.get("lists", {}):
+        name_len = max(name_len, len(item["name"]))
+        type_len = max(type_len, len(item["type"]) + 8)
+        lines.append((item["name"], "List of {}".format(item["type"]), item["desc"]))
+
+    s += "=" * name_len + " " + "=" * type_len + " " + "=" * 11 + "\n"
+    s += "Field Name".ljust(name_len + 1) + "Type".ljust(type_len + 1) + "Description\n"
+    s += "=" * name_len + " " + "=" * type_len + " " + "=" * 11 + "\n"
+    for line in lines:
+        s += line[0].ljust(name_len + 1)
+        s += line[1].ljust(type_len + 1)
+        s += line[2]
+        s += "\n"
+    s += "=" * name_len + " " + "=" * type_len + " " + "=" * 11 + "\n"
+    return s
+
+
+def gen_tool_docs():
+    table = []
+    s = ""
+    for backend in get_edatools():
+        name = backend.__name__
+
+        if name == "Edatool":
+            continue
+
+        table.append(
+            {
+                "name": name.lower(),
+                "type": "`" + name + " backend`_",
+                "desc": name + "-specific options",
+            }
+        )
+
+        s += "\n{} backend\n{}\n\n".format(name, "~" * (len(name) + 8))
+        s += _class_doc(backend.get_doc(0))
+
+    return (
+        _class_doc(
+            {
+                "description": "Tool options are used to set tool-specific options. Each key corresponds to a specific EDA tool.\n\n**Note** This section is only used by the legacy Tool API",
+                "members": table,
+            }
+        )
+        + s
+    )

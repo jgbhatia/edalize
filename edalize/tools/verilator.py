@@ -6,10 +6,10 @@ import os
 
 from edalize.tools.edatool import Edatool
 from edalize.utils import EdaCommands
+from edalize.verilator import Verilator as EdalizeVerilator
 
 
 class Verilator(Edatool):
-
     description = "Verilator, the fastest Verilog/SystemVerilog simulator"
 
     TOOL_OPTIONS = {
@@ -20,45 +20,56 @@ class Verilator(Edatool):
         "make_options": {
             "type": "str",
             "desc": "Additional arguments passed to make when compiling the simulation. This is commonly used to set OPT/OPT_FAST/OPT_SLOW.",
+            "list": True,
         },
         "mode": {
             "type": "str",
-            "desc": "Select compilation mode. Legal values are *cc* for C++ testbenches, *sc* for SystemC testbenches or *lint-only* to only perform linting on the Verilog code",
+            "desc": "Select compilation mode. Use *none* for no compilation mode. Legal values are *binary*, *cc*, *dpi-hdr-only*, *lint-only*, *none*, *preprocess-only*, *sc*, *xml-only*. See Verilator documentation for function: https://veripool.org/guide/latest/exe_verilator.html",
+        },
+        "gen-xml": {
+            "type": "bool",
+            "desc": "Generate XML output",
+        },
+        "gen-dpi-hdr": {
+            "type": "bool",
+            "desc": "Generate DPI header output",
+        },
+        "gen-preprocess": {
+            "type": "bool",
+            "desc": "Generate preprocessor output",
         },
         "verilator_options": {
             "type": "str",
             "desc": "Additional options for verilator",
             "list": True,
         },
-        # run_options?
+        "run_options": {
+            "type": "str",
+            "desc": "Additional arguments passed when running the compiled model.",
+            "list": True,
+        },
     }
 
-    def configure(self, edam):
-        super().configure(edam)
+    def setup(self, edam):
+        super().setup(edam)
 
         # Future improvement: Separate include directories of c and verilog files
-        incdirs = set()
+        incdirs = []
 
         verilator_file = self.name + ".vc"
 
         vc = []
         vc.append("--Mdir .")
 
-        modes = ["sc", "cc", "lint-only"]
-
         # Default to cc mode if not specified
         mode = self.tool_options.get("mode", "cc")
 
-        if not mode in modes:
+        if mode not in EdalizeVerilator.modes:
             _s = "Illegal verilator mode {}. Allowed values are {}"
-            raise RuntimeError(_s.format(mode, ", ".join(modes)))
+            raise RuntimeError(_s.format(mode, ", ".join(EdalizeVerilator.modes)))
         vc.append("--" + mode)
 
         vc += self.tool_options.get("verilator_options", [])
-
-        for include_dir in incdirs:
-            vc.append(f"+incdir+" + include_dir)
-            vc.append("-CFLAGS -I" + include_dir)
 
         vlt_files = []
         vlog_files = []
@@ -66,7 +77,7 @@ class Verilator(Edatool):
         uhdm_files = []
 
         unused_files = []
-        depfiles = []
+        depfiles = [verilator_file]
         for f in self.files:
             file_type = f.get("file_type", "")
             depfile = True
@@ -76,6 +87,7 @@ class Verilator(Edatool):
                 if not self._add_include_dir(f, incdirs):
                     vlog_files.append(f["name"])
             elif file_type in ["cppSource", "systemCSource", "cSource"]:
+                depfile = False
                 if not self._add_include_dir(f, incdirs):
                     opt_c_files.append(f["name"])
             elif file_type == "vlt":
@@ -96,6 +108,10 @@ class Verilator(Edatool):
         if uhdm_files:
             vc.append("--uhdm-ast-sv")
 
+        for include_dir in incdirs:
+            vc.append(f"+incdir+" + include_dir)
+            vc.append("-CFLAGS -I" + include_dir)
+
         vc += vlt_files + uhdm_files + vlog_files
 
         vc.append(f"--top-module {self.toplevel}\n")
@@ -109,11 +125,13 @@ class Verilator(Edatool):
                 "-G{}={}".format(k, self._param_value_str(v, str_quote_style='\\"'))
             )
         for k, v in self.vlogdefine.items():
-            vc.append("-D{}={}\n".format(k, self._param_value_str(v)))
+            vc.append("-D{}={}".format(k, self._param_value_str(v)))
 
-        with open(os.path.join(self.work_root, verilator_file), "w") as ffile:
-            ffile.write("\n".join(vc) + "\n")
+        self.vc = vc
 
+        if self.edam.get("flow_options", {}).get("cocotb_module"):
+            self.toplevel = "top"
+            verilator_file += " `cocotb-config --share`/lib/verilator/verilator.cpp"
         mk_file = f"V{self.toplevel}.mk"
         exe_file = f"V{self.toplevel}"
         commands = EdaCommands()
@@ -123,19 +141,28 @@ class Verilator(Edatool):
             depfiles,
         )
 
-        if mode == "lint-only":
-            self.default_target = mk_file
+        if mode in [
+            "binary",
+            "dpi-hdr-only",
+            "lint-only",
+            "preprocess-only",
+            "xml-only",
+        ]:
+            commands.set_default_target(mk_file)
         else:
             commands.add(
                 ["make", "-f", mk_file] + self.tool_options.get("make_options", []),
                 [exe_file],
-                [mk_file],
+                [mk_file] + opt_c_files,
             )
-            self.default_target = exe_file
+            commands.set_default_target(exe_file)
 
-        self.commands = commands.commands
+        self.commands = commands
 
-    def run(self, args):
+    def write_config_files(self):
+        self.update_config_file(self.name + ".vc", "\n".join(self.vc) + "\n")
+
+    def run(self):
         self.args = []
         for key, value in self.plusarg.items():
             self.args += ["+{}={}".format(key, self._param_value_str(value))]
@@ -145,8 +172,13 @@ class Verilator(Edatool):
         self.args += self.tool_options.get("run_options", [])
 
         # Default to cc mode if not specified
-        if not "mode" in self.tool_options:
+        if "mode" not in self.tool_options:
             self.tool_options["mode"] = "cc"
-        if self.tool_options["mode"] == "lint-only":
+        if self.tool_options["mode"] in [
+            "dpi-hdr-only",
+            "lint-only",
+            "preprocess-only",
+            "xml-only",
+        ]:
             return
         return ("./V" + self.toplevel, self.args, self.work_root)

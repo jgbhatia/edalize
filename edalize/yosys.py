@@ -62,6 +62,9 @@ class Yosys(Edatool):
             }
 
     def configure_main(self):
+        logger.warning(
+            "This backend is deprecated and will eventually be removed. Please migrate to the flow API instead.  See https://edalize.readthedocs.io/en/latest/ref/migrations.html#migrating-from-the-tool-api-to-the-flow-api for more details."
+        )
         # write Yosys tcl script file
 
         yosys_template = self.tool_options.get("yosys_template")
@@ -130,7 +133,9 @@ class Yosys(Edatool):
             "synth_options": " ".join(self.tool_options.get("yosys_synth_options", "")),
             "write_command": "write_" + output_format,
             "output_name": default_target,
-            "output_opts": "-pvector bra " if arch == "xilinx" else "",
+            "output_opts": "-pvector bra "
+            if (arch == "xilinx" and output_format == "edif")
+            else "",
             "yosys_template": template,
             "name": self.name,
         }
@@ -153,5 +158,5 @@ class Yosys(Edatool):
         if self.tool_options.get("yosys_as_subtool"):
             self.commands = commands.commands
         else:
-            commands.set_default_target(f"{self.name}.{output_format}")
+            commands.set_default_target(default_target)
             commands.write(os.path.join(self.work_root, "Makefile"))

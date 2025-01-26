@@ -1,5 +1,5 @@
 import pytest
-from .edalize_common import make_edalize_test
+from .edalize_common import get_flow, make_edalize_test
 
 
 def test_vivado(make_edalize_test):
@@ -45,7 +45,7 @@ def test_vivado_minimal(params, tmpdir, make_edalize_test):
         "name": name,
         "flow_options": {"synth": synth_tool, "part": "xc7a35tcsg324-1"},
     }
-    vivado_flow = edalize.get_flow("vivado")
+    vivado_flow = get_flow("vivado")
     vivado_backend = vivado_flow(edam=edam, work_root=work_root)
     vivado_backend.configure()
 
@@ -84,6 +84,54 @@ def test_vivado_board_file(make_edalize_test):
             "board_part": "em.avnet.com:mini_itx_7z100:part0:1.0",
             "board_repo_paths": ["./board_repo"],
         },
+    )
+    tf.backend.configure()
+    tf.compare_files(
+        [
+            "Makefile",
+            tf.test_name + ".tcl",
+            tf.test_name + "_synth.tcl",
+            tf.test_name + "_run.tcl",
+            tf.test_name + "_pgm.tcl",
+        ]
+    )
+
+    tf.backend.build()
+    tf.compare_files(["vivado.cmd"])
+
+
+def test_vivado_edif_netlist(make_edalize_test):
+    tf = make_edalize_test(
+        "vivado",
+        ref_dir="edif_netlist",
+        files=[{"name": "netlist.edif", "file_type": "edif"}],
+        param_types=["generic", "vlogdefine", "vlogparam"],
+        tool_options={"part": "xc7a35tcsg324-1"},
+    )
+    tf.backend.configure()
+    tf.compare_files(
+        [
+            "Makefile",
+            tf.test_name + ".tcl",
+            tf.test_name + "_synth.tcl",
+            tf.test_name + "_run.tcl",
+            tf.test_name + "_pgm.tcl",
+        ]
+    )
+
+    tf.backend.build()
+    tf.compare_files(["vivado.cmd"])
+
+
+def test_vivado_edif_netlist_no_link_design(make_edalize_test):
+    tf = make_edalize_test(
+        "vivado",
+        ref_dir="edif_netlist_no_link_design",
+        files=[
+            {"name": "netlist.edif", "file_type": "edif", "tags": ["no_link_design"]}
+        ],
+        param_types=["generic", "vlogdefine", "vlogparam"],
+        tool_options={"part": "xc7a35tcsg324-1"},
     )
     tf.backend.configure()
     tf.compare_files(

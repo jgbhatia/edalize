@@ -1,10 +1,11 @@
 from collections import OrderedDict
+from importlib import import_module
 import os.path
 import shutil
 
 import pytest
 
-from edalize import get_edatool
+from edalize.edatool import get_edatool
 
 
 tests_dir = os.path.dirname(__file__)
@@ -139,6 +140,10 @@ def compare_files(ref_dir, work_root, files):
             assert fref.read() == fgen.read(), f
 
 
+def get_flow(name):
+    return getattr(import_module("edalize.flows.{}".format(name)), name.capitalize())
+
+
 def param_gen(paramtypes):
     """Generate dictionary of definitions in *paramtypes* list."""
 
@@ -182,6 +187,13 @@ def _setup_backend(
                 with open(_f, "a"):
                     os.utime(_f, None)
 
+    for f in [x["name"] for x in (files or FILES)]:
+        _f = os.path.join(work_root, f)
+        if not os.path.exists(os.path.dirname(_f)):
+            os.makedirs(os.path.dirname(_f))
+        with open(_f, "a"):
+            os.utime(_f, None)
+
     edam = {
         "name": name,
         "files": FILES if files is None else files,
@@ -206,6 +218,11 @@ FILES = [
     {"name": "tcl_file.tcl", "file_type": "tclSource"},
     {"name": "waiver_file.waiver", "file_type": "waiver"},
     {"name": "vlog_file.v", "file_type": "verilogSource"},
+    {
+        "name": "vlog_with_define.v",
+        "file_type": "verilogSource",
+        "define": {"FD_KEY": "FD_VAL"},
+    },
     {"name": "vlog05_file.v", "file_type": "verilogSource-2005"},
     {"name": "vlog_incfile", "file_type": "verilogSource", "is_include_file": True},
     {"name": "vhdl_file.vhd", "file_type": "vhdlSource"},

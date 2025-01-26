@@ -12,7 +12,7 @@ proc xfile_add_exist_ok name {
 }
 
 project_new_exist_ok test_ise_0
-project set family spartan6
+project set family "spartan6"
 project set device xc6slx45
 project set package csg324
 project set speed -2
@@ -24,6 +24,7 @@ xfile add bmm_file
 xfile_add_exist_ok ucf_file.ucf
 source tcl_file.tcl
 xfile add vlog_file.v
+xfile add vlog_with_define.v
 xfile add vlog05_file.v
 xfile add vhdl_file.vhd
 lib_vhdl new libx

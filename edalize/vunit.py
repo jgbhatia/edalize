@@ -7,6 +7,7 @@ import sys
 import logging
 from collections import OrderedDict
 from edalize.edatool import Edatool
+from edalize.utils import get_file_type
 
 logger = logging.getLogger(__name__)
 
@@ -62,13 +63,13 @@ class Vunit(Edatool):
         # vunit does not allow empty library name or 'work', so we use `vunit_test_runner_lib`:
         libraries = OrderedDict()
 
+        core_files = {}
+        depend = {}
         for f in src_files:
             lib = f.logical_name if f.logical_name else "vunit_test_runner_lib"
-
-            if lib in libraries:
-                libraries[lib].append(f)
-            else:
-                libraries[lib] = [f]
+            libraries.setdefault(lib, []).append(f)
+            if f.core:
+                core_files.setdefault(f.core, []).append(f)
 
         escaped_name = self.name.replace(".", "_")
         add_libraries = self.tool_options.get("add_libraries", [])
@@ -79,6 +80,8 @@ class Vunit(Edatool):
                 "name": escaped_name,
                 "vunit_runner_path": self.get_vunit_runner_path(src_files),
                 "libraries": libraries,
+                "core_dependencies": self.edam.get("dependencies", {}),
+                "core_files": core_files,
                 "add_libraries": add_libraries,
                 "tool_options": self.tool_options,
             },
@@ -103,16 +106,13 @@ class Vunit(Edatool):
         return fragments[1]
 
     def src_file_filter(self, f):
-        def _get_file_type(f):
-            return f.file_type.split("-")[0]
-
         file_mapping = {
             "verilogSource": lambda f: f.name,
             "systemVerilogSource": lambda f: f.name,
             "vhdlSource": lambda f: f.name,
         }
 
-        _file_type = _get_file_type(f)
+        _file_type = get_file_type(f)
         if _file_type in file_mapping:
             return file_mapping[_file_type](f)
         elif _file_type == "user":

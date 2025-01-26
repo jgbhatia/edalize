@@ -11,12 +11,12 @@ import re
 import xml.etree.ElementTree as ET
 from functools import partial
 from edalize.edatool import Edatool
+from edalize.utils import get_file_type
 
 logger = logging.getLogger(__name__)
 
 
 class Quartus(Edatool):
-
     argtypes = ["vlogdefine", "vlogparam", "generic"]
 
     # Define Standard edition to be our default version
@@ -49,13 +49,18 @@ class Quartus(Edatool):
                     },
                     {
                         "name": "board_device_index",
-                        "type": "String",
+                        "type": "Integer",
                         "desc": "Specifies the FPGA's device number in the JTAG chain. The device index specifies the device where the flash programmer looks for the Nios® II JTAG debug module. JTAG devices are numbered relative to the JTAG chain, starting at 1. Use the tool `jtagconfig` to determine the index.",
                     },
                     {
                         "name": "pnr",
                         "type": "String",
                         "desc": "P&R tool. Allowed values are quartus (default), dse (to run Design Space Explorer) and none (to just run synthesis)",
+                    },
+                    {
+                        "name": "pgm",
+                        "type": "String",
+                        "desc": "Programming tool. Default is 'none', set to 'quartus' to program the FPGA in the run stage.",
                     },
                 ],
                 "lists": [
@@ -169,26 +174,31 @@ class Quartus(Edatool):
             "quartus-project.tcl.j2", escaped_name + ".tcl", template_vars
         )
 
-    # Helper to extract file type
-    def file_type(self, f):
-        return f.file_type.split("-")[0]
-
     # Filter for just QSYS files. This verifies that they are compatible
     # with the identified Quartus version
     def qsys_file_filter(self, f):
         name = ""
-        if self.file_type(f) == "QSYS":
+        if get_file_type(f) == "QSYS":
             # Compatibility checks
             try:
                 qsysTree = ET.parse(os.path.join(self.work_root, f.name))
                 try:
-                    tool = qsysTree.find("component").attrib["tool"]
-                    if tool == "QsysPro" and self.isPro:
+                    try:
+                        tool = qsysTree.find("component").attrib["tool"]
+                    except AttributeError:
+                        tool = qsysTree.find(
+                            ".//{http://www.altera.com/XMLSchema/IPXact2014/extensions}tool"
+                        ).text
+                    if tool == "QsysPro":
+                        if self.isPro:
+                            name = f.name
+                    elif not self.isPro:
                         name = f.name
                 except (AttributeError, KeyError):
                     # Either a component wasn't found in the QSYS file, or it
                     # had no associated tool information. Make the assumption
-                    # it was a Standard edition file
+                    # it is a Standard edition file, as the old formats just
+                    # don't specify.
                     if not self.isPro:
                         name = f.name
             except (ET.ParseError, IOError):
@@ -242,7 +252,7 @@ class Quartus(Edatool):
             "tclSource": partial(_handle_tcl),
         }
 
-        _file_type = self.file_type(f)
+        _file_type = get_file_type(f)
         if _file_type in file_mapping:
             return file_mapping[_file_type](f)
         elif _file_type == "user":
@@ -275,13 +285,8 @@ class Quartus(Edatool):
         args += ["-o"]
         args += ["p;" + self.name.replace(".", "_") + ".sof"]
 
-        if "pnr" in self.tool_options:
-            if self.tool_options["pnr"] == "quartus":
-                pass
-            elif self.tool_options["pnr"] == "dse":
-                return
-            elif self.tool_options["pnr"] == "none":
-                return
+        if ("pgm" not in self.tool_options) or (self.tool_options["pgm"] != "quartus"):
+            return
 
         if "board_device_index" in self.tool_options:
             args[-1] += "@" + self.tool_options["board_device_index"]
